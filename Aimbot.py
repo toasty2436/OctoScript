@@ -41,6 +41,8 @@ import hashlib
 from time import sleep
 from datetime import datetime
 import json as jsond
+
+print("Loading Dataset..")
 def getchecksum():
     md5_hash = hashlib.md5()
     file = open(''.join(sys.argv), "rb")
