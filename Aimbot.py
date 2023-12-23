@@ -18,8 +18,7 @@ from Crypto.Cipher import AES
 from Crypto.Hash import SHA256
 from Crypto.Util.Padding import pad, unpad
 import sys
-sys.path.append('Auth')
-from auth import api
+
 
 
 import time
@@ -49,42 +48,6 @@ def getchecksum():
     digest = md5_hash.hexdigest()
     return digest
 
-keyauthapp = api(
-    name="OctoClient",
-    ownerid="LDqoE0rXl7",
-    secret="c728059d02b3dc96254ee36eac72c20fef37e3cbf85be6719804bb43065ae839",
-    version="1.0",
-    hash_to_check=getchecksum()
-)
-print(Fore.RED+"OctoAuth V1")
-def save_license_to_file(key):
-    with open('key.txt', 'w') as key_file:
-        key_file.write(key)
-
-def load_license_from_file():
-    try:
-        with open('key.txt', 'r') as key_file:
-            return key_file.read().strip()
-    except FileNotFoundError:
-        return None
-
-def answer():
-    try:
-        global keyauthapp  # Declare keyauthapp as a global variable
-
-        saved_license = load_license_from_file()
-        if saved_license:
-            print(Fore.GREEN+ f"Found a saved license: {saved_license}")
-            keyauthapp.license(saved_license)
-        else:
-            key = input(Fore.BLUE+'Enter your license: ')
-            keyauthapp.license(key)
-            save_license_to_file(key)
-
-    except KeyboardInterrupt:
-        os._exit(1)
-
-answer()
 
 def setup():
     path = "config"
