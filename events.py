@@ -22,7 +22,6 @@ class guiConf:
         with open("config/guiconf.json") as f:
          gui_Conf = json.load(f)
 
-
 if guiConf.gui_Conf["aimkey"] == "leftShift": #if aimkey from config = shift
     print("leftShift")
     def is_targeted():
@@ -343,7 +342,6 @@ class Aimbot:
         sens_config = json.load(f)
     aimbot_status = colored("ENABLED", 'blue')
 
-
     def __init__(self, box_constant = box_size, collect_data = False, mouse_delay = 0.0001, debug = False):
         #controls the initial centered box width and height of the "Vision" window
         self.box_constant = box_constant #controls the size of the detection box (equaling the width and height)
@@ -408,7 +406,6 @@ class Aimbot:
 
         if self.debug: start_time = time.perf_counter()
         for rel_x, rel_y in Aimbot.interpolate_coordinates_from_center((x, y), scale):
-
             Aimbot.ii_.mi = MouseInput(rel_x, rel_y, 0, 0x0001, 0, ctypes.pointer(Aimbot.extra))
             input_obj = Input(ctypes.c_ulong(0), Aimbot.ii_)
             ctypes.windll.user32.SendInput(1, ctypes.byref(input_obj), ctypes.sizeof(input_obj))
@@ -498,14 +495,6 @@ class Aimbot:
                         if not player_in_frame:
                             player_in_frame = True
 
-                def move_crosshair(self, x, y):
-                    if self.aimbone == "chest":
-                        relative_head_Y = int((y1 + y2) / 2)
-                    elif self.aimbone == "legs":
-                        relative_head_Y = y2  # Aim at the bottom of the player
-                    else:
-                        # Default to head if aimbone is not recognized or missing
-                        relative_head_Y = int((y1 + y2) / 2 - height / 2.7)
                 if closest_detection: #if valid detection exists
 
                     #draw line from the crosshair to the head
