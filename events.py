@@ -514,7 +514,7 @@ class Aimbot:
                 cv2.imwrite(f"lib/data/{str(uuid.uuid4())}.jpg", orig_frame)
                 collect_pause = time.perf_counter()
             
-            cv2.putText(frame, f"{int(1/(time.perf_counter() - start_time)) * 4.5 }", (5, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255,255,255), 1)
+            cv2.putText(frame, f"{int(1/(time.perf_counter() - start_time)) * 4.5 }", (5, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (201,99,31), 1)
             cv2.imshow("OctoView", frame)
             if cv2.waitKey(1) & 0xFF == ord('0'):
                 break
