@@ -55,7 +55,7 @@ class Aimbot:
     ii_ = Input_I()
     screen = mss.mss()
     pixel_increment = 9 #controls how many pixels the mouse moves for each relative movement
-    with open("lib/config/config.json") as f:
+    with open("config/config.json") as f:
         sens_config = json.load(f)
     aimbot_status = colored("ENABLED", 'green')
 
