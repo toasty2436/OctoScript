@@ -1,236 +1,617 @@
-import ctypes
-import cv2
 import json
-import math
-import mss
-import numpy as np
+from subprocess import call
+import threading
+
+import json as jsond  # json
+import colorama
+from colorama import Fore, Back, Style
+
+import time  # sleep before exit
+
+import binascii  # hex encoding
+
+import requests  # https requests
+
+from uuid import uuid4  # gen random guid
+
+from Crypto.Cipher import AES
+from Crypto.Hash import SHA256
+from Crypto.Util.Padding import pad, unpad
+import sys
+sys.path.append('Auth')
+from auth import api
+
+
+import time
+import platform
+import os
+import hashlib
+from time import sleep
+from datetime import datetime
+
+import webbrowser
+import platform
+import subprocess
+import datetime
+import sys
+import os
+
+from requests_toolbelt.adapters.fingerprint import FingerprintAdapter
+import os
+import hashlib
+from time import sleep
+from datetime import datetime
+import json as jsond
+def getchecksum():
+    md5_hash = hashlib.md5()
+    file = open(''.join(sys.argv), "rb")
+    md5_hash.update(file.read())
+    digest = md5_hash.hexdigest()
+    return digest
+
+keyauthapp = api(
+    name="OctoClient",
+    ownerid="LDqoE0rXl7",
+    secret="c728059d02b3dc96254ee36eac72c20fef37e3cbf85be6719804bb43065ae839",
+    version="1.0",
+    hash_to_check=getchecksum()
+)
+print(Fore.RED+"OctoAuth V1")
+def save_license_to_file(key):
+    with open('key.txt', 'w') as key_file:
+        key_file.write(key)
+
+def load_license_from_file():
+    try:
+        with open('key.txt', 'r') as key_file:
+            return key_file.read().strip()
+    except FileNotFoundError:
+        return None
+
+def answer():
+    try:
+        global keyauthapp  # Declare keyauthapp as a global variable
+
+        saved_license = load_license_from_file()
+        if saved_license:
+            print(Fore.GREEN+ f"Found a saved license: {saved_license}")
+            keyauthapp.license(saved_license)
+        else:
+            key = input(Fore.BLUE+'Enter your license: ')
+            keyauthapp.license(key)
+            save_license_to_file(key)
+
+    except KeyboardInterrupt:
+        os._exit(1)
+
+answer()
+
+def setup():
+    path = "config"
+    if not os.path.exists(path):
+        os.makedirs(path)
+
+    print("[INFO] In-game X and Y axis sensitivity should be the same")
+
+    def prompt(str):
+        valid_input = False
+        while not valid_input:
+            try:
+                number = float(input(str))
+                valid_input = True
+            except ValueError:
+                print("[!] Invalid Input. Make sure to enter only the number (e.g. 6.9)")
+        return number
+
+    xy_sens = prompt("X-Axis and Y-Axis Sensitivity (from in-game settings): ")
+    targeting_sens = prompt("Targeting Sensitivity (from in-game settings): ")
+
+    print("[INFO] Your in-game targeting sensitivity must be the same as your scoping sensitivity")
+    sensitivity_settings = {"xy_sens": xy_sens, "targeting_sens": targeting_sens, "xy_scale": 10 / xy_sens,
+                            "targeting_scale": 1000 / (targeting_sens * xy_sens)}
+
+    with open('config/config.json', 'w') as outfile:
+        json.dump(sensitivity_settings, outfile)
+    print("[INFO] Sensitivity configuration complete")
+
+
+
+import dearpygui.dearpygui as dpg
+import json
 import os
 import sys
+import threading
 import time
-import torch
-import uuid
-import win32api
-from os import system
-import time
-
+from pynput import keyboard
+from pynput.keyboard import Key, Controller
 from termcolor import colored
+import subprocess
+import keyboard
+from subprocess import call
+import psutil
 
 
-PUL = ctypes.POINTER(ctypes.c_ulong)
-class KeyBdInput(ctypes.Structure):
-    _fields_ = [("wVk", ctypes.c_ushort),
-                ("wScan", ctypes.c_ushort),
-                ("dwFlags", ctypes.c_ulong),
-                ("time", ctypes.c_ulong),
-                ("dwExtraInfo", PUL)]
+from events import Aimbot
 
-class HardwareInput(ctypes.Structure):
-    _fields_ = [("uMsg", ctypes.c_ulong),
-                ("wParamL", ctypes.c_short),
-                ("wParamH", ctypes.c_ushort)]
+dpg.create_context()
 
-class MouseInput(ctypes.Structure):
-    _fields_ = [("dx", ctypes.c_long),
-                ("dy", ctypes.c_long),
-                ("mouseData", ctypes.c_ulong),
-                ("dwFlags", ctypes.c_ulong),
-                ("time", ctypes.c_ulong),
-                ("dwExtraInfo", PUL)]
-
-class Input_I(ctypes.Union):
-    _fields_ = [("ki", KeyBdInput),
-                ("mi", MouseInput),
-                ("hi", HardwareInput)]
-
-class Input(ctypes.Structure):
-    _fields_ = [("type", ctypes.c_ulong),
-                ("ii", Input_I)]
-
-class POINT(ctypes.Structure):
-    _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+dpg.create_viewport(title='OctoClient', width=500, height=260, decorated=False, always_on_top=False, clear_color=(255, 255, 255, 255))
+def on_insert():
+    print('insert was pressed')
+    dpg.set_viewport_always_top(True)
+    keyboard.add_hotkey('insert', on_insert)
 
 
-class Aimbot:
-    extra = ctypes.c_ulong(0)
-    ii_ = Input_I()
-    screen = mss.mss()
-    pixel_increment = 9 #controls how many pixels the mouse moves for each relative movement
-    with open("config/config.json") as f:
-        sens_config = json.load(f)
-    aimbot_status = colored("ENABLED", 'green')
+def on_del():
+    print('delete was pressed')
+    dpg.set_viewport_always_top(False)
+    dpg.minimize_viewport
+    keyboard.add_hotkey('delete', on_del)
 
-    def __init__(self, box_constant = 650, collect_data = False, mouse_delay = 0.0001, debug = False):
-        #controls the initial centered box width and height of the "Lunar Vision" window
-        self.box_constant = box_constant #controls the size of the detection box (equaling the width and height)
-
-        def temp_print(val: str):
-            print(colored("[INFO] Loading the neural network model...", "green"))
-            time.sleep(2)
-            system('cls')
-
-
-        self.model = torch.hub.load('ultralytics/yolov5', 'custom', path='lib/best.pt', force_reload = True)
-        system('cls')
-        if torch.cuda.is_available():
-            system('cls')
-            system('cls')
-            print(colored("                                         Enjoy!" , "yellow"))
-            time.sleep(1)
-            system('cls')
-        else:
-            print(colored("[!] CUDA ACCELERATION IS UNAVAILABLE", "red"))
-            print(colored("[!] Check your PyTorch installation, else performance will be poor", "red"))
-
-        self.model.conf = 0.50 # base confidence threshold (or base detection (0-1)
-        self.model.iou = 0.40 # NMS IoU (0-1)
-        self.collect_data = collect_data
-        self.mouse_delay = mouse_delay
-        self.debug = debug
-        print(colored("                               [Made By The OctoTeam]" , "red"))
-        print("                                                                       ")
-        print(colored("\n                          [>] PRESS 'F1' TO TOGGLE AIMBOT\n"
-                      "                          [>] PRESS 'F3' TO QUIT","yellow"))
-
-    def update_status_aimbot():
-        if Aimbot.aimbot_status == colored("ENABLED", 'green'):
-            Aimbot.aimbot_status = colored("DISABLED", 'red')
-        else:
-            Aimbot.aimbot_status = colored("ENABLED", 'green')
-        sys.stdout.write("\033[K")
-        print("")
-        print(f"[!] AIMBOT IS [{Aimbot.aimbot_status}]", end = "\r")
-
-    def singleclick():
-        '''Single Left Click'''
-        ctypes.windll.user32.mouse_event(2, 0, 0, 0, 0)  # Left Down MOUSE_LEFTDOWN = 0x0002
-        ctypes.windll.user32.mouse_event(4, 0, 0, 0, 0)  # left Up MOUSE_LEFTUP = 0x0004
-
-
-    def sleep(duration, get_now = time.perf_counter):
-        if duration == 0: return
-        now = get_now()
-        end = now + duration
-        while now < end:
-            now = get_now()
-
-    def is_aimbot_enabled():
-        return True if Aimbot.aimbot_status == colored("ENABLED", 'green') else False
+dpg.show_imgui_demo
+dpg.set_viewport_max_height(260)
+dpg.set_viewport_max_width(500)
+dpg.set_viewport_min_height(260)
+dpg.set_viewport_min_width(500)
+def print_me(sender):
+    keyboard = Controller()
+    keyboard.press(Key.f2)#press f2 to close earlier instance of the nn windows
+    keyboard.release(Key.f2)
+def aimkey_alt():
+    global aimkey
+    aimkey = "alt"
+    print(aimkey)
+def aimkey_shift():
+    global aimkey
+    aimkey = "shift"
+    print(aimkey)
+def aimkey_leftMouse():
+    global aimkey
+    aimkey = "leftMouse"
+    print(aimkey)
+def aimkey_rightMouse():
+    global aimkey
+    aimkey = "rightMouse"
+    print(aimkey)
+def aimkey_ctrl():
+    global aimkey
+    aimkey = "ctrl"
+    print(aimkey)
+def aimkey_mouse5():
+    global aimkey
+    aimkey = "mouse5"
+    print(aimkey)
+def fovsize_big():
+    global fovsize
+    fovsize = "big"
+    print(fovsize)
+def fovsize_medium():
+    global fovsize
+    fovsize = "medium"
+    print(fovsize)
+def fovsize_small():
+    global fovsize
+    fovsize = "small"
+    print(fovsize)
+def strenght(Sender):
+    global aim_strenght
+    print(dpg.get_value(Sender))
+    aim_strenght = dpg.get_value(Sender)
+def detection_threshhold(Sender):
+    global dt_value
+    print(dpg.get_value(Sender))
+    dt_value = (dpg.get_value(Sender))
+def fovcolor(Sender):
+    print(dpg.get_value(Sender))
+def aimbot_toggle(Sender):
+    Aimbot.aimbot_status = colored("DISABLED", 'red')
 
 
-    def is_targeted():
-        return True if win32api.GetKeyState(0x01) in (-127, -128) else False
+def getAimkeyString(Sender):
+    global aimkey
+    dpg.get_value(Sender)
+    print(dpg.get_value(Sender))
+    confAimkey = dpg.get_value(Sender)
+    print("Your Aimkey is",confAimkey)
+    if confAimkey == "LEFT ALT":
+        print("Your Aimkey is LEFT  ALT")
+        aimkey = "leftAlt"
+    elif confAimkey == "LEFT SHIFT":
+        print("Your Aimkey is really LEFT SHIFT")
+        aimkey = "leftShift"
+    elif confAimkey == "RIGHT CLICK":
+        print("Your Aimkey is really RIGHT MOUSE")
+        aimkey = "rightMouse"
+    elif confAimkey == "LEFT CLICK":
+        print("Your Aimkey is really LEFT MOUSE")
+        aimkey = "leftMouse"
+    elif confAimkey == "MOUSE 4":
+        print("Your Aimkey is really MOUSE4")
+        aimkey = "mouse4"
+    elif confAimkey == "MOUSE 5":
+        print("Your Aimkey is really MOUSE5")
+        aimkey = "mouse5"
+    elif confAimkey == "CNTRL":
+        print("Your Aimkey is really CNTRL")
+        aimkey = "cntrl"
+    elif confAimkey == "`":
+        print("Your Aimkey is really `")
+        aimkey = "`"
+    elif confAimkey == "1":
+        print("Your Aimkey is really 1")
+        aimkey = "1"
+    elif confAimkey == "2":
+        print("Your Aimkey is really 2")
+        aimkey = "2"
+    elif confAimkey == "3":
+        print("Your Aimkey is really 3")
+        aimkey = "3"
+    elif confAimkey == "4":
+        print("Your Aimkey is really 4")
+        aimkey = "4"
+    elif confAimkey == "5":
+        print("Your Aimkey is really 5")
+        aimkey = "5"
+    elif confAimkey == "6":
+        print("Your Aimkey is really 6")
+        aimkey = "6"
+    elif confAimkey == "7":
+        print("Your Aimkey is really 7")
+        aimkey = "7"
+    elif confAimkey == "8":
+        print("Your Aimkey is really 8")
+        aimkey = "8"
+    elif confAimkey == "9":
+        print("Your Aimkey is really 9")
+        aimkey = "9"
+    elif confAimkey == "0":
+        print("Your Aimkey is really 0")
+        aimkey = "0"
+    elif confAimkey == "-":
+        print("Your Aimkey is really -")
+        aimkey = "-"
+    elif confAimkey == "=":
+        print("Your Aimkey is really =")
+        aimkey = "="
+    elif confAimkey == "Q":
+        print("Your Aimkey is really Q")
+        aimkey = "Q"
+    elif confAimkey == "W":
+        print("Your Aimkey is really W")
+        aimkey = "W"
+    elif confAimkey == "E":
+        print("Your Aimkey is really E")
+        aimkey = "E"
+    elif confAimkey == "R":
+        print("Your Aimkey is really R")
+        aimkey = "R"
+    elif confAimkey == "T":
+        print("Your Aimkey is really T")
+        aimkey = "T"
+    elif confAimkey == "Y":
+        print("Your Aimkey is really Y")
+        aimkey = "Y"
+    elif confAimkey == "U":
+        print("Your Aimkey is really U")
+        aimkey = "U"
+    elif confAimkey == "I":
+        print("Your Aimkey is really I")
+        aimkey = "I"
+    elif confAimkey == "O":
+        print("Your Aimkey is really O")
+        aimkey = "O"
+    elif confAimkey == "P":
+        print("Your Aimkey is really P")
+        aimkey = "P"
+    elif confAimkey == "[":
+        print("Your Aimkey is really [")
+        aimkey = "["
+    elif confAimkey == "]":
+        print("Your Aimkey is really ]")
+        aimkey = "]"
+    elif confAimkey == "A":
+        print("Your Aimkey is really A")
+        aimkey = "A"
+    elif confAimkey == "S":
+        print("Your Aimkey is really S")
+        aimkey = "S"
+    elif confAimkey == "D":
+        print("Your Aimkey is really D")
+        aimkey = "D"
+    elif confAimkey == "F":
+        print("Your Aimkey is really F")
+        aimkey = "F"
+    elif confAimkey == "G":
+        print("Your Aimkey is really G")
+        aimkey = "G"
+    elif confAimkey == "H":
+        print("Your Aimkey is really H")
+        aimkey = "H"
+    elif confAimkey == "J":
+        print("Your Aimkey is really J")
+        aimkey = "J"
+    elif confAimkey == "K":
+        print("Your Aimkey is really K")
+        aimkey = "K"
+    elif confAimkey == "L":
+        print("Your Aimkey is really L")
+        aimkey = "L"
+    elif confAimkey == ";":
+        print("Your Aimkey is really ;")
+        aimkey = ";"
+    elif confAimkey == "@":
+        print("Your Aimkey is really @")
+        aimkey = "@"
+    elif confAimkey == "#":
+        print("Your Aimkey is really #")
+        aimkey = "#"
+    elif confAimkey == "Z":
+        print("Your Aimkey is really Z")
+        aimkey = "Z"
+    elif confAimkey == "'":
+        print("Your Aimkey is really '")
+        aimkey = "'"
+    elif confAimkey == "X":
+        print("Your Aimkey is really X")
+        aimkey = "X"
+    elif confAimkey == "C":
+        print("Your Aimkey is really C")
+        aimkey = "C"
+    elif confAimkey == "V":
+        print("Your Aimkey is really V")
+        aimkey = "V"
+    elif confAimkey == "B":
+        print("Your Aimkey is really B")
+        aimkey = "B"
+    elif confAimkey == "N":
+        print("Your Aimkey is really N")
+        aimkey = "N"
+    elif confAimkey == "M":
+        print("Your Aimkey is really M")
+        aimkey = "M"
+    elif confAimkey == ",":
+        print("Your Aimkey is really ,")
+        aimkey = ","
+    elif confAimkey == ".":
+        print("Your Aimkey is really .")
+        aimkey = "."
+    elif confAimkey == "/":
+        print("Your Aimkey is really /")
+        aimkey = "/"
+    elif confAimkey == "CAPS LOCK":
+        print("Your Aimkey is really CAPS LOCK")
+        aimkey = "capsLock"
+    elif confAimkey == "\ ":
+        print("Your Aimkey is really \ ")
+        aimkey = "\ "
 
-    def is_target_locked(x, y):
-        #plus/minus 5 pixel threshold
-        threshold = 4
-        return True if 960 - threshold <= x <= 960 + threshold and 540 - threshold <= y <= 540 + threshold else False
+def thread_second():
+    call(["python", "extension.py"])
+    processThread = threading.Thread(target=thread_second)
+    processThread.start()
+def close():
+    dpg.destroy_context()
 
-    def move_crosshair(self, x, y):
-        if Aimbot.is_targeted():
-            scale = Aimbot.sens_config["targeting_scale"]
-        else:
-            return #TODO
+def setsens():
+    os.system('python setSens.py')
+def fov_state(Sender): #returns 1 or 0 under fov_dis depending on the state of the checkbox
+    global fov_dis
+    print(dpg.get_value(Sender))
+    if dpg.get_value(Sender) == True:
+        print("FOV circle is activated")
+        fov_dis = 1
+    elif dpg.get_value(Sender) == False:
+        print("FOV circle is deactivated")
+        fov_dis = 0
+def save():
+    global dt_value
+    configuration = {"aimkey": aimkey, "fovsize": fovsize, "strenght": aim_strenght, "confidence": dt_value}
+    with open('config/guiconf.json', 'w') as outfile:
+        json.dump(configuration, outfile)
+def start():
+    keyboard = Controller()
+    keyboard.press(Key.f2)
+    keyboard.release(Key.f2)
+    import json
+    import os
+    import sys
+    import threading
+    import time
+    from pynput import keyboard
+    from termcolor import colored
 
-        if self.debug: start_time = time.perf_counter()
-        for rel_x, rel_y in Aimbot.interpolate_coordinates_from_center((x, y), scale):
-            Aimbot.ii_.mi = MouseInput(rel_x, rel_y, 0, 0x0001, 0, ctypes.pointer(Aimbot.extra))
-            input_obj = Input(ctypes.c_ulong(0), Aimbot.ii_)
-            ctypes.windll.user32.SendInput(1, ctypes.byref(input_obj), ctypes.sizeof(input_obj))
-            if not self.debug: Aimbot.sleep(self.mouse_delay) #time.sleep is not accurate enough
-        if self.debug: #remove this later
-            print(f"TIME: {time.perf_counter() - start_time}")
-            print("DEBUG: SLEEPING FOR 1 SECOND")
-            time.sleep(1)
+    def on_release(key):
+        try:
+            if key == keyboard.Key.f1:
+                Aimbot.update_status_aimbot()
+            if key == keyboard.Key.f2:
+                Aimbot.clean_up()
+        except NameError:
+            pass
 
-    #generator yields pixel tuples for relative movement
-    def interpolate_coordinates_from_center(absolute_coordinates, scale):
-        diff_x = (absolute_coordinates[0] - 960) * scale/Aimbot.pixel_increment
-        diff_y = (absolute_coordinates[1] - 525) * scale/Aimbot.pixel_increment
-        length = int(math.dist((0,0), (diff_x, diff_y)))
-        if length == 0: return
-        unit_x = (diff_x/length) * Aimbot.pixel_increment
-        unit_y = (diff_y/length) * Aimbot.pixel_increment
-        x = y = sum_x = sum_y = 0
-        for k in range(0, length):
-            sum_x += x
-            sum_y += y
-            x, y = round(unit_x * k - sum_x), round(unit_y * k - sum_y)
-            yield x, y
-            
+    def lunar():
+        global lunar
+        lunar = Aimbot(collect_data = "collect_data" in sys.argv)
+        lunar.start()
 
-    def start(self):
-        Aimbot.update_status_aimbot()
-        half_screen_width = ctypes.windll.user32.GetSystemMetrics(0)/2 #this should always be 960
-        half_screen_height = ctypes.windll.user32.GetSystemMetrics(1)/2 #this should always be 540
-        detection_box = {'left': int(half_screen_width - self.box_constant//2), #x1 coord (for top-left corner of the box)
-                          'top': int(half_screen_height - self.box_constant//2), #y1 coord (for top-left corner of the box)
-                          'width' : int(self.box_constant),  #width of the box
-                          'height' : int(self.box_constant)} #height of the box
-        if self.collect_data:
-            collect_pause = 0
+    dt_value = 0.6
 
-        while True:
-            start_time = time.perf_counter()
-            frame = np.array(Aimbot.screen.grab(detection_box))
-            if self.collect_data: orig_frame = np.copy((frame))
-            results = self.model(frame)
+    def setup():
+        path = "config"
+        if not os.path.exists(path):
+            os.makedirs(path)
 
-            if len(results.xyxy[0]) != 0: #player detected
-                least_crosshair_dist = closest_detection = player_in_frame = False
-                for *box, conf, cls in results.xyxy[0]: #iterate over each player detected
-                    x1y1 = [int(x.item()) for x in box[:2]]
-                    x2y2 = [int(x.item()) for x in box[2:]]
-                    x1, y1, x2, y2, conf = *x1y1, *x2y2, conf.item()
-                    height = y2 - y1
-                    relative_head_X, relative_head_Y = int((x1 + x2)/2), int((y1 + y2)/2 - height/2.7) #offset to roughly approximate the head using a ratio of the height
-                    own_player = x1 < 15 or (x1 < self.box_constant/5 and y2 > self.box_constant/1.2) #helps ensure that your own player is not regarded as a valid detection
+        print("[Lunar Paste] In-game X and Y sensitivity have to be the same!")
+        def prompt(str):
+            valid_input = False
+            while not valid_input:
+                try:
+                    number = float(input(str))
+                    valid_input = True
+                except ValueError:
+                    print("[!] Invalid Input. Make sure to enter only the number (e.g. 6.9)")
+            return number
 
-                    #calculate the distance between each detection and the crosshair at (self.box_constant/2, self.box_constant/2)
-                    crosshair_dist = math.dist((relative_head_X, relative_head_Y), (self.box_constant/2, self.box_constant/2))
+        xy_sens = prompt("X-Axis and Y Sensitivity (from in-game settings): ")
+        targeting_sens = prompt("Targeting Sensitivity (from in-game settings): ")
 
-                    if not least_crosshair_dist: least_crosshair_dist = crosshair_dist #initalize least crosshair distance variable first iteration
+        print("[Lunar Paste] Your in-game targeting sensitivity must be the same as your scoping sensitivity")
+        sensitivity_settings = {"xy_sens": xy_sens, "targeting_sens": targeting_sens, "xy_scale": 10/xy_sens, "targeting_scale": 1000/(targeting_sens * xy_sens)}
 
-                    if crosshair_dist <= least_crosshair_dist and not own_player:
-                        least_crosshair_dist = crosshair_dist
-                        closest_detection = {"x1y1": x1y1, "x2y2": x2y2, "relative_head_X": relative_head_X, "relative_head_Y": relative_head_Y, "conf": conf}
+        with open('config/config.json', 'w') as outfile:
+            json.dump(sensitivity_settings, outfile)
+        print("[Lunar Paste] Sensitivity configuration complete")
 
-                    if not own_player:
-                        cv2.rectangle(frame, x1y1, x2y2, (0,255,0), 2) #draw the bounding boxes for all of the player detections (except own)
-                        cv2.putText(frame, f"{int(conf * 100)}%", x1y1, cv2.FONT_HERSHEY_DUPLEX, 0.5, (255,0,0), 2) #draw the confidence labels on the bounding boxes
-                    else:
-                        own_player = False
-                        if not player_in_frame:
-                            player_in_frame = True
+    if __name__ == "__main__":
+        os.system('cls' if os.name == 'nt' else 'clear')
+        os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = '1'
+        path_exists = os.path.exists("config/config.json")
+        if not path_exists or ("setup" in sys.argv):
+            if not path_exists:
+                print("[Lunar Paste] Ingame sensitivity hasnt been configurated yet...")
+            setup()
+        path_exists = os.path.exists("lib/data")
+        if "collect_data" in sys.argv and not path_exists:
+            os.makedirs("lib/data")
+        from events import Aimbot
+        listener = keyboard.Listener(on_release=on_release)
+        listener.start()
+        lunar()
 
-                if closest_detection: #if valid detection exists
-                    cv2.circle(frame, (closest_detection["relative_head_X"], closest_detection["relative_head_Y"]), 5, (0,0,255), -1) #draw circle on the head
 
-                    #draw line from the crosshair to the head
-                    cv2.line(frame, (closest_detection["relative_head_X"], closest_detection["relative_head_Y"]), (self.box_constant//2, self.box_constant//2), (0,0,255), 2)
+        print ("the file is run in the background")
 
-                    absolute_head_X, absolute_head_Y = closest_detection["relative_head_X"] + detection_box['left'], closest_detection["relative_head_Y"] + detection_box['top']
+with dpg.theme() as global_theme:
+        with dpg.theme_component(0):
+            dpg.add_theme_color(dpg.mvThemeCol_Text, (255, 255, 255, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TextDisabled, (112, 112, 112, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (15, 15, 15, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_ChildBg, (0, 0, 0, 0))
+            dpg.add_theme_color(dpg.mvThemeCol_PopupBg, (20, 20, 20, 240))
+            dpg.add_theme_color(dpg.mvThemeCol_Border, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_BorderShadow, (0, 0, 0, 0))
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (28, 28, 28, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TitleBg, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TitleBgCollapsed, (0, 0, 0, 130))
+            dpg.add_theme_color(dpg.mvThemeCol_MenuBarBg, (28, 28, 28, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_ScrollbarBg, (15, 15, 15, 135))
+            dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrab, (54, 54, 54, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrabHovered, (120, 120, 120, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrabActive, (207, 212, 207, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_CheckMark, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_SliderGrab, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_SliderGrabActive, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_Button, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (122, 122, 122, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_Header, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_Separator, (54, 54, 54, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_SeparatorHovered, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_SeparatorActive, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_ResizeGrip, (54, 54, 54, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_ResizeGripHovered, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_ResizeGripActive, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_Tab, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TabHovered, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TabActive, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TabUnfocused, (18, 26, 38, 247))
+            dpg.add_theme_color(dpg.mvThemeCol_TabUnfocusedActive, (36, 66, 107, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_DockingPreview, (102, 102, 230, 80))
+            dpg.add_theme_color(dpg.mvThemeCol_DockingEmptyBg, (51, 51, 51, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_PlotLines, (156, 156, 156, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_PlotLinesHovered, (255, 110, 89, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_PlotHistogram, (230, 179, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_PlotHistogramHovered, (255, 153, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TableHeaderBg, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TableBorderStrong, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TableBorderLight, (217, 168, 75, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TableRowBg, (28, 28, 28, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TableRowBgAlt, (35, 35, 35, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_TextSelectedBg, (66, 150, 250, 89))
+            dpg.add_theme_color(dpg.mvThemeCol_DragDropTarget, (255, 255, 0, 230))
+            dpg.add_theme_color(dpg.mvThemeCol_NavHighlight, (66, 150, 250, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_NavWindowingHighlight, (255, 255, 255, 179))
+            dpg.add_theme_color(dpg.mvThemeCol_NavWindowingDimBg, (204, 204, 204, 51))
+            dpg.add_theme_color(dpg.mvThemeCol_ModalWindowDimBg, (204, 204, 204, 89))
+            dpg.add_theme_color(dpg.mvPlotCol_FrameBg, (28, 28, 28, 255), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_PlotBg, (0, 0, 0, 128), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_PlotBorder, (72, 0, 0, 255), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_LegendBg, (28, 28, 28, 255), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_LegendBorder, (72, 0, 0, 255), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_LegendText, (255, 255, 255, 255), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_TitleText, (255, 255, 255, 255), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_InlayText, (255, 255, 255, 255), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_XAxis, (255, 255, 255, 255), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_XAxisGrid, (255, 255, 255, 255), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_YAxis, (255, 255, 255, 255), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_YAxisGrid, (255, 255, 255, 255), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_YAxis2, (255, 255, 255, 255), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_YAxisGrid2, (255, 255, 255, 255), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_YAxis3, (255, 255, 255, 255), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_YAxisGrid3, (255, 255, 255, 50), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_Selection, (66, 150, 250, 89), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_Query, (72, 0, 0, 255), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvPlotCol_Crosshairs, (255, 255, 255, 128), category=dpg.mvThemeCat_Plots)
+            dpg.add_theme_color(dpg.mvNodeCol_NodeBackground, (28, 28, 28, 255), category=dpg.mvThemeCat_Nodes)
+            dpg.add_theme_color(dpg.mvNodeCol_NodeBackgroundHovered, (72, 0, 0, 255), category=dpg.mvThemeCat_Nodes)
+            dpg.add_theme_color(dpg.mvNodeCol_NodeBackgroundSelected, (180, 140, 54, 220), category=dpg.mvThemeCat_Nodes)
+            dpg.add_theme_color(dpg.mvNodeCol_NodeOutline, (72, 0, 0, 255), category=dpg.mvThemeCat_Nodes)
+            dpg.add_theme_color(dpg.mvThemeCol_Button, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (72, 0, 0, 255))
+            dpg.add_theme_color(dpg.mvNodeCol_TitleBar, (72, 0, 0, 255), category=dpg.mvThemeCat_Nodes)
+            dpg.add_theme_color(dpg.mvNodeCol_TitleBarHovered, (135, 92, 38, 255), category=dpg.mvThemeCat_Nodes)
+            dpg.add_theme_color(dpg.mvNodeCol_TitleBarSelected, (140, 92, 38, 255), category=dpg.mvThemeCat_Nodes)
+            dpg.add_theme_color(dpg.mvNodeCol_Link, (61, 133, 224, 200), category=dpg.mvThemeCat_Nodes)
+            dpg.add_theme_color(dpg.mvNodeCol_LinkHovered, (66, 150, 250, 255), category=dpg.mvThemeCat_Nodes)
+            dpg.add_theme_color(dpg.mvNodeCol_LinkSelected, (66, 150, 250, 255), category=dpg.mvThemeCat_Nodes)
+            dpg.add_theme_color(dpg.mvNodeCol_Pin, (53, 150, 250, 180), category=dpg.mvThemeCat_Nodes)
+            dpg.add_theme_color(dpg.mvNodeCol_PinHovered, (53, 150, 250, 255), category=dpg.mvThemeCat_Nodes)
+            dpg.add_theme_color(dpg.mvNodeCol_BoxSelector, (61, 133, 224, 30), category=dpg.mvThemeCat_Nodes)
+            dpg.add_theme_color(dpg.mvNodeCol_BoxSelectorOutline, (61, 133, 224, 150), category=dpg.mvThemeCat_Nodes)
+            dpg.add_theme_color(dpg.mvNodeCol_GridBackground, (40, 40, 50, 200), category=dpg.mvThemeCat_Nodes)
+            dpg.add_theme_color(dpg.mvNodeCol_GridLine, (200, 200, 200, 40), category=dpg.mvThemeCat_Nodes)
 
-                    x1, y1 = closest_detection["x1y1"]
-                    if Aimbot.is_target_locked(absolute_head_X, absolute_head_Y):
-                        cv2.putText(frame, "LOCKED", (x1 + 40, y1), cv2.FONT_HERSHEY_DUPLEX, 0.5, (0, 255, 0), 2) #draw the confidence labels on the bounding boxes
-                    else:
-                        cv2.putText(frame, "", (x1 + 40, y1), cv2.FONT_HERSHEY_DUPLEX, 0.5, (0, 255, 0), 2) #draw the confidence labels on the bounding boxes
+dpg.bind_theme(global_theme)
 
-                    if Aimbot.is_aimbot_enabled():
-                        Aimbot.move_crosshair(self, absolute_head_X, absolute_head_Y)
+dpg.window(no_background=True)
+start()
 
-            if self.collect_data and time.perf_counter() - collect_pause > 1 and Aimbot.is_targeted() and Aimbot.is_aimbot_enabled() and not player_in_frame: #screenshots can only be taken every 1 second
-                cv2.imwrite(f"lib/data/{str(uuid.uuid4())}.jpg", orig_frame)
-                collect_pause = time.perf_counter()
-            
+with dpg.window(label="                      OctoClient | By OctoExploitzTeam",width=500,height=260,no_move=True,no_resize=True,no_close=True,no_collapse=True):
+     dpg.add_input_text(label="Aimkey",uppercase=True,callback=getAimkeyString)
+     dpg.add_slider_float(label="strength",min_value=1, default_value=6, max_value=10,callback = strenght)
+     dpg.add_slider_float(label="detection confidence",min_value=0.45, default_value=0.6, max_value=0.8,callback = detection_threshhold)
+     dpg.add_text("select FOV size")
 
-            cv2.imshow("Octo View", frame)
-            if cv2.waitKey(1) & 0xFF == ord('0'):
-                break
+     with dpg.menu(label="FOV size"):
+        dpg.add_menu_item(label="small", callback=fovsize_small)
+        dpg.add_menu_item(label="medium", callback=fovsize_medium)
+        dpg.add_menu_item(label="big", callback=fovsize_big)
+     dpg.add_checkbox(label="Enable Aimbot", callback=aimbot_toggle)
+     dpg.add_button(label="Save",callback=save)
+     dpg.add_button(label="start",callback=start)
+     dpg.add_button(label="Exit", callback=close)
 
-    def clean_up():
-        print("\n[INFO] F2 WAS PRESSED. QUITTING...")
-        Aimbot.screen.close()
-        os._exit(0)
+     with dpg.menu_bar():
+        with dpg.menu(label="Aimbot"):
+         #with dpg.menu(label="Config"):
+                    dpg.add_menu_item(label="Im not cheating the AI is", callback=print_me)
+                    #dpg.add_menu_item(label="Save Config", callback=print_me)
+        with dpg.menu(label="Visuals"):
+            dpg.add_checkbox(label="POC for overlay to draw fov(cant change overlay alpha yet)", callback=fov_state,default_value=False)
+            dpg.add_color_picker(label="Select Colour", width=90, height=90, callback=fovcolor)
+        with dpg.menu(label="info"):
+            dpg.add_text("Developed By Toastyisdead")
 
-if __name__ == "__main__": print("You are in the wrong directory and are running the wrong file; you must run toast.py")
+
+
+dpg.setup_dearpygui()
+dpg.show_viewport()
+dpg.start_dearpygui()
+dpg.destroy_context()
+
